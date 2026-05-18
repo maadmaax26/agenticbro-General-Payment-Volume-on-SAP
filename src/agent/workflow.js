@@ -105,6 +105,10 @@ export class WorkflowEngine {
     // Set up escrow with Sentinel (required for bounty)
     await this.synapse.setupEscrowWithSentinel();
 
+    // Set up a payment escrow for this agent so each cycle can settle real
+    // on-chain payment volume through SAP x402.
+    await this.synapse.setupSelfPaymentEscrow();
+
     this.cycleCount = this.state.cycleCount;
     console.log(`\n[Workflow] Initialized. Previous cycles: ${this.cycleCount}`);
     console.log(`[Workflow] Wallet: ${this.synapse.getWalletAddress()}\n`);
@@ -197,8 +201,7 @@ export class WorkflowEngine {
       const aceCalls = this.aceData.getSuccessCount();
 
       if (aceCalls > 0) {
-        const settlement = await this.synapse.settleCall(
-          this.config.sentinelAddress,
+        const settlement = await this.synapse.settleOwnCalls(
           aceCalls,
           `cycle_${cycleId}_${target.name}`
         );

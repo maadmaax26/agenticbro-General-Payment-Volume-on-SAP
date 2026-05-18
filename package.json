@@ -12,8 +12,8 @@
     "register": "node scripts/register.js",
     "setup": "node scripts/setup.js",
     "dashboard": "node dashboard/server.js",
-    "workflow:once": "node src/agent/workflow.js --once",
-    "workflow:loop": "node src/agent/workflow.js --loop"
+    "workflow:once": "node src/agent/run.js --once",
+    "workflow:loop": "node src/agent/run.js --loop"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.0",

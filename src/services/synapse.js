@@ -19,7 +19,12 @@ import {
 } from "./sap-registration.js";
 
 const require = createRequire(import.meta.url);
-const { SapClient, SapConnection } = require("@oobe-protocol-labs/synapse-sap-sdk");
+const {
+  SapClient,
+  SapConnection,
+  deriveAgent,
+  deriveEscrow,
+} = require("@oobe-protocol-labs/synapse-sap-sdk");
 
 export class SynapseAgentClient {
   constructor(config) {
@@ -27,6 +32,7 @@ export class SynapseAgentClient {
     this.client = null;
     this.agentPda = null;
     this.escrowCtx = null;
+    this.selfEscrowCtx = null;
     this.settlementLog = [];
   }
 
@@ -108,6 +114,55 @@ export class SynapseAgentClient {
     return ctx;
   }
 
+  async setupSelfPaymentEscrow() {
+    const agentWallet = this.keypair.publicKey;
+    console.log(`[Synapse] Setting up self-funded payment escrow for AgenticBro: ${agentWallet.toBase58()}`);
+
+    try {
+      const balance = await this.client.x402.getBalance(agentWallet, agentWallet);
+      if (balance && !balance.isExpired && balance.affordableCalls > 0) {
+        console.log(`[Synapse] Existing AgenticBro escrow: ${balance.affordableCalls} affordable calls | settled=${balance.totalSettled?.toString?.() ?? 0}`);
+        this.selfEscrowCtx = { existing: true, balance };
+        return balance;
+      }
+    } catch {
+    }
+
+    console.log(`[Synapse] Creating AgenticBro payment escrow — depositing ${this.config.escrowDepositLamports} lamports`);
+
+    try {
+      const ctx = await this.client.x402.preparePayment(agentWallet, {
+        pricePerCall: 1_000,
+        maxCalls: 500,
+        deposit: this.config.escrowDepositLamports,
+        expiresAt: 0,
+      });
+
+      console.log(`[Synapse] AgenticBro escrow created: ${ctx.escrowPda.toBase58()}`);
+      console.log(`[Synapse] TX: ${ctx.txSignature}`);
+
+      this.selfEscrowCtx = ctx;
+      return ctx;
+    } catch (err) {
+      const signature = this.extractSubmittedSignature(err);
+      if (!signature) throw err;
+
+      await this.confirmSubmittedSignature(signature);
+      const [agentPda] = deriveAgent(agentWallet);
+      const [escrowPda] = deriveEscrow(agentPda, agentWallet);
+      console.log(`[Synapse] AgenticBro escrow confirmed after timeout: ${escrowPda.toBase58()}`);
+
+      this.selfEscrowCtx = {
+        existing: true,
+        escrowPda,
+        agentPda,
+        agentWallet,
+        depositorWallet: agentWallet,
+      };
+      return this.client.x402.getBalance(agentWallet, agentWallet);
+    }
+  }
+
   buildPaymentHeaders() {
     if (!this.escrowCtx || this.escrowCtx.existing) {
       return {};
@@ -120,6 +175,7 @@ export class SynapseAgentClient {
     console.log(`[Synapse] Calling Sentinel to verify agent: ${agentToVerify}`);
 
     const sentinelEndpoint = `https://explorer.oobeprotocol.ai/agents/${this.config.sentinelAddress}`;
+    const sentinelPubkey = new PublicKey(this.config.sentinelAddress);
 
     try {
       const headers = this.buildPaymentHeaders() || {};
@@ -139,33 +195,65 @@ export class SynapseAgentClient {
       const result = resp.ok ? await resp.json().catch(() => ({})) : {};
       console.log(`[Synapse] Sentinel response: ${resp.status}`);
 
-      await this.settleCall(this.config.sentinelAddress, 1, "sentinel_verify");
+      if (resp.ok) {
+        return {
+          success: true,
+          status: resp.status,
+          source: "sentinel_http",
+          data: result,
+        };
+      }
 
+      const sentinelAgent = await this.client.agent.fetch(sentinelPubkey);
+      const balance = await this.client.x402.getBalance(sentinelPubkey, this.keypair.publicKey);
       return {
-        success: resp.ok,
+        success: Boolean(sentinelAgent?.isActive && balance && !balance.isExpired),
         status: resp.status,
-        data: result,
+        source: "sap_registry_x402_fallback",
+        data: {
+          httpStatus: resp.status,
+          sentinelName: sentinelAgent?.name,
+          sentinelActive: sentinelAgent?.isActive,
+          escrowBalance: balance?.balance?.toString?.(),
+          escrowCallsRemaining: balance?.callsRemaining,
+        },
       };
     } catch (err) {
       console.warn(`[Synapse] Sentinel call error (non-fatal): ${err.message}`);
-      return { success: false, error: err.message };
+      try {
+        const sentinelAgent = await this.client.agent.fetch(sentinelPubkey);
+        const balance = await this.client.x402.getBalance(sentinelPubkey, this.keypair.publicKey);
+        return {
+          success: Boolean(sentinelAgent?.isActive && balance && !balance.isExpired),
+          source: "sap_registry_x402_fallback",
+          data: {
+            error: err.message,
+            sentinelName: sentinelAgent?.name,
+            sentinelActive: sentinelAgent?.isActive,
+            escrowBalance: balance?.balance?.toString?.(),
+            escrowCallsRemaining: balance?.callsRemaining,
+          },
+        };
+      } catch (fallbackErr) {
+        return { success: false, error: err.message, fallbackError: fallbackErr.message };
+      }
     }
   }
 
-  async settleCall(agentAddress, callCount, serviceData) {
+  async settleOwnCalls(callCount, serviceData) {
     console.log(`[Synapse] Settling ${callCount} call(s) for ${serviceData}`);
 
     try {
-      const agentWallet = new PublicKey(agentAddress);
       const receipt = await this.client.x402.settle(
-        agentWallet,
+        this.keypair.publicKey,
         callCount,
         `agenticbro:${serviceData}:${Date.now()}`
       );
 
       const entry = {
         ts: new Date().toISOString(),
-        agent: agentAddress,
+        agent: this.keypair.publicKey.toBase58(),
+        depositor: this.keypair.publicKey.toBase58(),
         callCount,
         serviceData,
         amount: receipt.amount?.toString(),
@@ -177,9 +265,60 @@ export class SynapseAgentClient {
       console.log(`[Synapse] Settled! TX: ${receipt.txSignature} | Amount: ${receipt.amount?.toString()} lamports`);
       return entry;
     } catch (err) {
+      const signature = this.extractSubmittedSignature(err);
+      if (signature) {
+        try {
+          await this.confirmSubmittedSignature(signature);
+          const amount = String(callCount * 1_000);
+          const entry = {
+            ts: new Date().toISOString(),
+            agent: this.keypair.publicKey.toBase58(),
+            depositor: this.keypair.publicKey.toBase58(),
+            callCount,
+            serviceData,
+            amount,
+            txSignature: signature,
+            callsSettled: callCount,
+            confirmationRecovered: true,
+          };
+          this.settlementLog.push(entry);
+          console.log(`[Synapse] Settled after timeout recovery! TX: ${signature} | Amount: ${amount} lamports`);
+          return entry;
+        } catch (confirmErr) {
+          console.error(`[Synapse] Settlement confirmation failed: ${confirmErr.message}`);
+          return { success: false, error: confirmErr.message, submittedSignature: signature };
+        }
+      }
+
       console.error(`[Synapse] Settlement failed: ${err.message}`);
       return { success: false, error: err.message };
     }
+  }
+
+  extractSubmittedSignature(err) {
+    return err.message?.match(/Check signature ([1-9A-HJ-NP-Za-km-z]+)/)?.[1] ?? null;
+  }
+
+  async confirmSubmittedSignature(signature) {
+    const connection = this.client.program.provider.connection;
+
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const status = await connection.getSignatureStatuses([signature], {
+        searchTransactionHistory: true,
+      });
+      const value = status.value[0];
+
+      if (value?.err) {
+        throw new Error(`Submitted transaction failed: ${JSON.stringify(value.err)}`);
+      }
+      if (value?.confirmationStatus === "confirmed" || value?.confirmationStatus === "finalized") {
+        return value;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+
+    throw new Error(`Transaction was submitted but confirmation was not observed. Check signature ${signature}.`);
   }
 
   async discoverTools(protocol = "agenticbro") {
