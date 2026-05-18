@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgenticBro // Autonomous Scam Detection Agent</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&display=swap');
+
+  :root {
+    --bg: #050810;
+    --surface: #090e1a;
+    --border: #1a2540;
+    --accent: #00d4ff;
+    --accent2: #7b2fff;
+    --green: #00ff88;
+    --red: #ff3355;
+    --yellow: #ffcc00;
+    --orange: #ff6b35;
+    --text: #c8d8f0;
+    --dim: #4a5a7a;
+    --glow: 0 0 20px rgba(0,212,255,0.3);
+    --glow2: 0 0 20px rgba(123,47,255,0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Share Tech Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanlines effect */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(0,212,255,0.05) 0%, transparent 100%);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: var(--glow);
+    animation: pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 15px rgba(0,212,255,0.4); }
+    50% { box-shadow: 0 0 30px rgba(0,212,255,0.8), 0 0 60px rgba(123,47,255,0.3); }
+  }
+
+  .logo-text h1 {
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 900;
+    font-size: 20px;
+    color: var(--accent);
+    text-shadow: 0 0 10px rgba(0,212,255,0.5);
+    letter-spacing: 2px;
+  }
+
+  .logo-text span {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--dim);
+    display: inline-block;
+    margin-right: 6px;
+    transition: all 0.3s;
+  }
+
+  .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); animation: blink 2s infinite; }
+  .status-dot.error  { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .status-dot.init   { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: blink 0.5s infinite; }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .clock {
+    font-size: 12px;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* Main layout */
+  main {
+    padding: 20px 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto;
+    gap: 16px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .card:hover::before { opacity: 1; }
+  .card:hover { border-color: rgba(0,212,255,0.3); }
+
+  .card-title {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .icon { opacity: 0.7; }
+
+  /* Stats row */
+  .stats-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-value {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--accent);
+    text-shadow: 0 0 15px rgba(0,212,255,0.4);
+    line-height: 1;
+    margin-bottom: 4px;
+    transition: all 0.5s;
+  }
+
+  .stat-value.green { color: var(--green); text-shadow: 0 0 15px rgba(0,255,136,0.4); }
+  .stat-value.purple { color: var(--accent2); text-shadow: 0 0 15px rgba(123,47,255,0.4); }
+  .stat-value.orange { color: var(--orange); text-shadow: 0 0 15px rgba(255,107,53,0.4); }
+  .stat-value.yellow { color: var(--yellow); text-shadow: 0 0 15px rgba(255,204,0,0.4); }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .stat-change {
+    font-size: 10px;
+    color: var(--green);
+    margin-top: 4px;
+  }
+
+  /* Activity log */
+  .log-area {
+    grid-column: 1 / 3;
+    grid-row: span 2;
+  }
+
+  .log-container {
+    height: 320px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.8;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .log-entry {
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    animation: slideIn 0.3s ease-out;
+    border-left: 2px solid transparent;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-entry.info    { border-left-color: var(--accent); }
+  .log-entry.success { border-left-color: var(--green); background: rgba(0,255,136,0.03); }
+  .log-entry.error   { border-left-color: var(--red); background: rgba(255,51,85,0.05); }
+  .log-entry.payment { border-left-color: var(--yellow); background: rgba(255,204,0,0.03); }
+  .log-entry.ace     { border-left-color: var(--accent2); background: rgba(123,47,255,0.03); }
+
+  .log-ts   { color: var(--dim); flex-shrink: 0; font-size: 10px; padding-top: 2px; }
+  .log-msg  { flex: 1; word-break: break-all; }
+
+  /* Cycles table */
+  .cycles-area { grid-column: 3; grid-row: 2 / 4; }
+
+  .cycle-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 380px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .cycle-item {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .cycle-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 600;
+  }
+
+  .cycle-id { color: var(--accent); }
+
+  .risk-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  .risk-LOW      { background: rgba(0,255,136,0.15); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+  .risk-MEDIUM   { background: rgba(255,204,0,0.15);  color: var(--yellow); border: 1px solid rgba(255,204,0,0.3); }
+  .risk-HIGH     { background: rgba(255,107,53,0.15); color: var(--orange); border: 1px solid rgba(255,107,53,0.3); }
+  .risk-CRITICAL { background: rgba(255,51,85,0.15);  color: var(--red); border: 1px solid rgba(255,51,85,0.3); }
+  .risk-UNKNOWN  { background: rgba(74,90,122,0.2);  color: var(--dim); border: 1px solid var(--border); }
+
+  .cycle-meta {
+    color: var(--dim);
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+  }
+
+  .cycle-target {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* Payment volume chart */
+  .payments-area { grid-column: 1; }
+  .ace-area      { grid-column: 2; }
+
+  .mini-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 80px;
+    padding-top: 8px;
+  }
+
+  .mini-bar {
+    flex: 1;
+    background: linear-gradient(0deg, var(--accent2), var(--accent));
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+    transition: height 0.5s ease;
+    position: relative;
+    opacity: 0.8;
+  }
+
+  .mini-bar:hover { opacity: 1; }
+  .mini-bar:hover::after {
+    content: attr(data-val);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  /* Services grid */
+  .services-area { grid-column: 3; }
+
+  .service-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .service-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+    transition: border-color 0.3s;
+  }
+
+  .service-item:hover { border-color: rgba(0,212,255,0.2); }
+
+  .service-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .service-name {
+    flex: 1;
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .service-count {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .service-status {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--dim);
+  }
+  .service-status.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  /* Wallet info */
+  .wallet-area { grid-column: 1 / 3; }
+
+  .wallet-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    word-break: break-all;
+  }
+
+  .wallet-label {
+    color: var(--dim);
+    font-size: 10px;
+    flex-shrink: 0;
+    letter-spacing: 1px;
+  }
+
+  .wallet-addr { color: var(--accent); flex: 1; }
+
+  .explorer-link {
+    color: var(--accent2);
+    text-decoration: none;
+    font-size: 10px;
+    flex-shrink: 0;
+    letter-spacing: 1px;
+    border: 1px solid rgba(123,47,255,0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .explorer-link:hover {
+    background: rgba(123,47,255,0.15);
+    box-shadow: 0 0 10px rgba(123,47,255,0.3);
+  }
+
+  /* Run button */
+  .run-btn {
+    background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(123,47,255,0.15));
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    box-shadow: 0 0 10px rgba(0,212,255,0.1);
+  }
+
+  .run-btn:hover {
+    background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(123,47,255,0.25));
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+  }
+
+  .run-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Settlement feed */
+  .settlement-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(26,37,64,0.5);
+    font-size: 11px;
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .tx-link {
+    color: var(--accent2);
+    text-decoration: none;
+    font-size: 10px;
+  }
+
+  .tx-link:hover { text-decoration: underline; }
+
+  .amount-positive { color: var(--green); }
+
+  /* Progress bar */
+  .progress-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+    box-shadow: 0 0 8px rgba(0,212,255,0.5);
+  }
+
+  /* Cycle indicator */
+  .cycle-indicator {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .cycle-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: all 0.3s;
+  }
+
+  .cycle-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: blink 0.5s infinite;
+  }
+  .cycle-dot.done { background: var(--green); }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 16px;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+    border-top: 1px solid var(--border);
+  }
+
+  footer span { color: var(--accent); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Responsive */
+  @media (max-width: 1200px) {
+    main {
+      grid-template-columns: 1fr 1fr;
+    }
+    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+    .log-area { grid-column: 1 / -1; }
+    .cycles-area { grid-column: 1 / -1; }
+  }
+
+  .tag {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 1px;
+    font-weight: 600;
+  }
+
+  .tag-ace { background: rgba(123,47,255,0.2); color: var(--accent2); border: 1px solid rgba(123,47,255,0.3); }
+  .tag-sap { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.2); }
+  .tag-onchain { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+
+  .grid-2 { grid-column: 1 / 3; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div class="logo-text">
+      <h1>AGENTICBRO</h1>
+      <span>AUTONOMOUS SCAM DETECTION // OOBE BOUNTY</span>
+    </div>
+  </div>
+  <div class="header-status">
+    <div>
+      <span class="status-dot init" id="statusDot"></span>
+      <span id="statusText" style="font-size:12px">INITIALIZING</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="tag tag-ace">ACE DATA</span>
+      <span class="tag tag-sap">SAP</span>
+      <span class="tag tag-onchain">x402</span>
+    </div>
+    <button class="run-btn" id="runBtn" disabled onclick="triggerCycle()">▶ RUN CYCLE</button>
+    <div class="clock" id="clock"></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stats Row -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="statCycles">0</div>
+      <div class="stat-label">Cycles Run</div>
+      <div class="stat-change" id="statCyclesChange"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value green" id="statAceCalls">0</div>
+      <div class="stat-label">AceData Calls</div>
+      <div class="stat-change">3+ services</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value purple" id="statSettled">0</div>
+      <div class="stat-label">Lamports Settled</div>
+      <div class="stat-change">on-chain</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value orange" id="statTxns">0</div>
+      <div class="stat-label">On-Chain TXs</div>
+      <div class="stat-change">x402 escrow</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value yellow" id="statServices">4</div>
+      <div class="stat-label">Distinct Services</div>
+      <div class="stat-change">≥3 required</div>
+    </div>
+  </div>
+
+  <!-- Activity Log -->
+  <div class="card log-area">
+    <div class="card-title">
+      <span class="icon">📡</span> Live Activity Feed
+      <span style="margin-left:auto;font-size:10px;color:var(--accent)" id="logCount">0 entries</span>
+    </div>
+    <div class="log-container" id="logContainer"></div>
+  </div>
+
+  <!-- Cycles list -->
+  <div class="card cycles-area">
+    <div class="card-title"><span class="icon">🔄</span> Recent Cycles</div>
+    <div class="cycle-list" id="cycleList">
+      <div style="color:var(--dim);font-size:11px;text-align:center;padding:20px">
+        Waiting for first cycle...
+      </div>
+    </div>
+  </div>
+
+  <!-- Wallet info -->
+  <div class="card wallet-area">
+    <div class="card-title"><span class="icon">💼</span> Agent Identity</div>
+    <div class="wallet-box">
+      <span class="wallet-label">SAP WALLET</span>
+      <span class="wallet-addr" id="walletAddr">—</span>
+      <a class="explorer-link" id="explorerLink" href="#" target="_blank">VIEW ON EXPLORER ↗</a>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:16px;font-size:11px;color:var(--dim)">
+      <span>Cluster: <span style="color:var(--accent)" id="cluster">—</span></span>
+      <span>Sentinel: <span style="color:var(--green)">✓ CONFIGURED</span></span>
+      <span>Escrow: <span style="color:var(--accent)" id="escrowStatus">—</span></span>
+    </div>
+  </div>
+
+  <!-- AceData services -->
+  <div class="card services-area">
+    <div class="card-title"><span class="icon">⚡</span> Ace Data Cloud Services</div>
+    <div class="service-list">
+      <div class="service-item">
+        <div class="service-icon" style="background:rgba(0,212,255,0.1)">🔍</div>
+        <div>
+          <div class="service-name">Web Search</div>
+          <div style="font-size:10px;color:var(--dim)">Threat intelligence</div>
+        </div>
+        <div class="service-count" id="svcSearch">0</div>
+        <div class="service-status" id="svcSearchDot"></div>
+      </div>
+      <div class="service-item">
+        <div class="service-icon" style="background:rgba(123,47,255,0.1)">🧠</div>
+        <div>
+          <div class="service-name">AI Text Gen</div>
+          <div style="font-size:10px;color:var(--dim)">Token analysis</div>
+        </div>
+        <div class="service-count" id="svcTextgen">0</div>
+        <div class="service-status" id="svcTextgenDot"></div>
+      </div>
+      <div class="service-item">
+        <div class="service-icon" style="background:rgba(255,107,53,0.1)">🐦</div>
+        <div>
+          <div class="service-name">Social Scan</div>
+          <div style="font-size:10px;color:var(--dim)">Twitter signals</div>
+        </div>
+        <div class="service-count" id="svcSocial">0</div>
+        <div class="service-status" id="svcSocialDot"></div>
+      </div>
+      <div class="service-item">
+        <div class="service-icon" style="background:rgba(0,255,136,0.1)">📰</div>
+        <div>
+          <div class="service-name">News Intel</div>
+          <div style="font-size:10px;color:var(--dim)">Reputation scan</div>
+        </div>
+        <div class="service-count" id="svcNews">0</div>
+        <div class="service-status" id="svcNewsDot"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settlements -->
+  <div class="card grid-2">
+    <div class="card-title"><span class="icon">⛓️</span> On-Chain Settlements</div>
+    <div id="settlementList" style="max-height:150px;overflow-y:auto">
+      <div style="color:var(--dim);font-size:11px;text-align:center;padding:16px">
+        No settlements yet...
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Built by <span>Agentic Insights LLC</span> for the OOBE Protocol + Ace Data Cloud Bounty //
+  AgenticBro <span>$AGNTCBRO</span> on Solana //
+  <a href="https://agenticbro.app" style="color:var(--accent);text-decoration:none">agenticbro.app</a>
+</footer>
+
+<script>
+  // ── State ─────────────────────────────────────────────────────────────────
+  let state = {
+    initialized: false,
+    cycleCount: 0,
+    settlements: [],
+    aceCallLog: [],
+    results: [],
+    wallet: null,
+  };
+
+  let logCount = 0;
+  const svcCounts = { web_search: 0, text_generation: 0, social_scan: 0, news_scan: 0 };
+
+  // ── Clock ─────────────────────────────────────────────────────────────────
+  function updateClock() {
+    document.getElementById('clock').textContent = new Date().toISOString().slice(0,19).replace('T',' ') + ' UTC';
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── SSE connection ────────────────────────────────────────────────────────
+  const evtSource = new EventSource('/events');
+
+  evtSource.onmessage = (evt) => {
+    const event = JSON.parse(evt.data);
+    handleEvent(event);
+  };
+
+  evtSource.onerror = () => {
+    setStatus('error', 'DISCONNECTED');
+    addLog('error', 'SSE connection lost. Retrying...');
+  };
+
+  function handleEvent(event) {
+    switch (event.type) {
+      case 'state':
+        applyState(event.payload);
+        break;
+      case 'initialized':
+        applyState(event.payload);
+        setStatus('online', 'ACTIVE');
+        addLog('success', '✅ Agent initialized on SAP mainnet');
+        document.getElementById('runBtn').disabled = false;
+        break;
+      case 'init_error':
+        setStatus('error', 'INIT ERROR');
+        addLog('error', '❌ Init failed: ' + event.payload.error);
+        break;
+      case 'cycle_start':
+        setStatus('online', 'RUNNING CYCLE');
+        addLog('info', '▶ Cycle started');
+        break;
+      case 'cycle_complete':
+        applyState(null);
+        renderCycle(event.payload);
+        updateStats(event.payload);
+        addLog('success', `✅ Cycle #${event.payload.cycleId} complete — ${event.payload.target?.name}`);
+        if (event.payload.steps?.settlement?.txSignature) {
+          addLog('payment', `⛓️  Settled on-chain: ${event.payload.steps.settlement.txSignature?.slice(0,20)}...`);
+          addSettlement(event.payload);
+        }
+        setStatus('online', 'ACTIVE');
+        // Fetch fresh state
+        fetchStatus();
+        break;
+      case 'cycle_error':
+        addLog('error', '❌ Cycle error: ' + event.payload.error);
+        setStatus('online', 'ACTIVE');
+        break;
+    }
+  }
+
+  function fetchStatus() {
+    fetch('/api/status')
+      .then(r => r.json())
+      .then(applyState)
+      .catch(() => {});
+  }
+
+  function applyState(payload) {
+    if (!payload) return;
+    state = { ...state, ...payload };
+
+    if (payload.initError) {
+      setStatus('error', 'INIT ERROR');
+      document.getElementById('runBtn').disabled = true;
+      if (!state.lastInitErrorLogged || state.lastInitErrorLogged !== payload.initError) {
+        addLog('error', 'Init failed: ' + payload.initError);
+        state.lastInitErrorLogged = payload.initError;
+      }
+    }
+
+    // Wallet
+    if (payload.wallet) {
+      document.getElementById('walletAddr').textContent = payload.wallet;
+      const link = document.getElementById('explorerLink');
+      link.href = `https://explorer.oobeprotocol.ai/agents/${payload.wallet}`;
+    }
+
+    // Stats
+    document.getElementById('statCycles').textContent = payload.cycleCount ?? state.cycleCount ?? 0;
+    document.getElementById('statTxns').textContent = payload.settlements?.length ?? state.settlements?.length ?? 0;
+
+    const totalSettled = (payload.settlements ?? state.settlements ?? [])
+      .reduce((s, e) => s + parseInt(e.amount ?? 0), 0);
+    document.getElementById('statSettled').textContent = formatLamports(totalSettled);
+
+    const aceCalls = (payload.aceCallLog ?? state.aceCallLog ?? []).filter(c => c.success).length;
+    document.getElementById('statAceCalls').textContent = aceCalls;
+
+    // Update service counts
+    const callLog = payload.aceCallLog ?? state.aceCallLog ?? [];
+    callLog.forEach(entry => {
+      if (entry.service && entry.success) {
+        svcCounts[entry.service] = (svcCounts[entry.service] ?? 0) + 1;
+      }
+    });
+    updateServiceDisplay();
+
+    // Settlements
+    if (payload.settlements?.length) {
+      renderSettlements(payload.settlements);
+    }
+
+    // Results
+    if (payload.results?.length) {
+      renderCycles(payload.results);
+    }
+
+    // Status
+    if (payload.initialized) {
+      setStatus('online', 'ACTIVE');
+      document.getElementById('runBtn').disabled = false;
+    }
+  }
+
+  function setStatus(cls, text) {
+    const dot = document.getElementById('statusDot');
+    dot.className = `status-dot ${cls}`;
+    document.getElementById('statusText').textContent = text;
+  }
+
+  function addLog(type, msg) {
+    const container = document.getElementById('logContainer');
+    const ts = new Date().toISOString().slice(11,19);
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.innerHTML = `<span class="log-ts">${ts}</span><span class="log-msg">${msg}</span>`;
+    container.appendChild(entry);
+    container.scrollTop = container.scrollHeight;
+    logCount++;
+    document.getElementById('logCount').textContent = `${logCount} entries`;
+  }
+
+  function renderCycle(cycle) {
+    const riskLevel = cycle.steps?.aiAnalysis?.data?.analysis?.riskLevel ?? 'UNKNOWN';
+    const item = document.createElement('div');
+    item.className = 'cycle-item';
+    item.innerHTML = `
+      <div class="cycle-header">
+        <span class="cycle-id">#${cycle.cycleId}</span>
+        <span class="risk-badge risk-${riskLevel}">${riskLevel}</span>
+      </div>
+      <div class="cycle-target">${cycle.target?.name ?? '—'}</div>
+      <div class="cycle-meta">
+        <span>${cycle.aceCalls ?? 0} ace calls</span>
+        <span>${cycle.paymentVolume ? formatLamports(cycle.paymentVolume) + ' settled' : 'no settlement'}</span>
+      </div>
+    `;
+
+    const list = document.getElementById('cycleList');
+    if (list.querySelector('[style]')) list.innerHTML = '';
+    list.prepend(item);
+    if (list.children.length > 20) list.removeChild(list.lastChild);
+  }
+
+  function renderCycles(results) {
+    results.slice(-5).reverse().forEach(renderCycle);
+  }
+
+  function addSettlement(cycle) {
+    const item = document.createElement('div');
+    item.className = 'settlement-item';
+    const tx = cycle.steps?.settlement?.txSignature ?? '';
+    item.innerHTML = `
+      <span style="color:var(--dim)">${new Date().toISOString().slice(11,19)}</span>
+      <span style="color:var(--text)">${cycle.target?.name ?? '—'}</span>
+      <a class="tx-link" href="https://solscan.io/tx/${tx}" target="_blank">${tx.slice(0,12)}...</a>
+      <span class="amount-positive">+${formatLamports(cycle.paymentVolume ?? 0)}</span>
+    `;
+    const list = document.getElementById('settlementList');
+    if (list.querySelector('[style]')) list.innerHTML = '';
+    list.prepend(item);
+  }
+
+  function renderSettlements(settlements) {
+    const list = document.getElementById('settlementList');
+    if (!settlements.length) return;
+    list.innerHTML = '';
+    settlements.slice(-10).reverse().forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'settlement-item';
+      const tx = s.txSignature ?? '';
+      item.innerHTML = `
+        <span style="color:var(--dim)">${s.ts?.slice(11,19) ?? '—'}</span>
+        <span style="color:var(--text)">${s.serviceData ?? '—'}</span>
+        <a class="tx-link" href="https://solscan.io/tx/${tx}" target="_blank">${tx ? tx.slice(0,14)+'...' : '—'}</a>
+        <span class="amount-positive">+${formatLamports(parseInt(s.amount ?? 0))}</span>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  function updateStats(cycle) {
+    if (cycle.aceCalls) {
+      const current = parseInt(document.getElementById('statAceCalls').textContent) || 0;
+      document.getElementById('statAceCalls').textContent = current + (cycle.aceCalls ?? 0);
+    }
+    document.getElementById('statCycles').textContent = cycle.cycleId;
+    document.getElementById('statCyclesChange').textContent = '+1 this run';
+  }
+
+  function updateServiceDisplay() {
+    const m = { web_search: 'Search', text_generation: 'Textgen', social_scan: 'Social', news_scan: 'News' };
+    const ids = { web_search: 'svcSearch', text_generation: 'svcTextgen', social_scan: 'svcSocial', news_scan: 'svcNews' };
+
+    for (const [key, el] of Object.entries(ids)) {
+      const count = svcCounts[key] ?? 0;
+      document.getElementById(el).textContent = count;
+      const dot = document.getElementById(el + 'Dot');
+      if (dot) dot.className = `service-status ${count > 0 ? 'active' : ''}`;
+    }
+  }
+
+  function formatLamports(lamports) {
+    if (lamports >= 1_000_000_000) return (lamports / 1_000_000_000).toFixed(3) + ' SOL';
+    if (lamports >= 1_000) return (lamports / 1_000).toFixed(1) + 'K';
+    return lamports.toString();
+  }
+
+  async function triggerCycle() {
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ RUNNING...';
+    addLog('info', '▶ Manual cycle triggered');
+
+    try {
+      const resp = await fetch('/api/run-cycle', { method: 'POST' });
+      const data = await resp.json();
+      if (!data.success) addLog('error', 'Cycle failed: ' + data.error);
+    } catch (err) {
+      addLog('error', 'Request failed: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '▶ RUN CYCLE';
+    }
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  addLog('info', '🤖 AgenticBro Dashboard starting...');
+  addLog('info', 'Connecting to Synapse Agent Protocol...');
+  addLog('ace', 'Loading Ace Data Cloud services: WebSearch, TextGen, Social, News');
+  fetchStatus();
+</script>
+</body>
+</html>
