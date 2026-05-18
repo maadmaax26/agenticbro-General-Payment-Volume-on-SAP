@@ -79,6 +79,10 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
+app.get("/demo", (req, res) => {
+  res.sendFile(path.join(__dirname, "demo.html"));
+});
+
 async function initializeEngine(port) {
   try {
     await engine.init();
